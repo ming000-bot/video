@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>m3u8播放器</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body {
+            background: radial-gradient(circle at 20% 30%, #0a0f1e, #03050b);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', 'Poppins', 'Orbitron', 'Share Tech Mono', monospace;
+            padding: 20px;
+        }
+        .player-container {
+            width: 100%;
+            max-width: 1300px;
+            background: rgba(12, 20, 35, 0.65);
+            backdrop-filter: blur(12px);
+            border-radius: 2rem;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 255, 255, 0.2);
+            padding: 1.2rem;
+            transition: all 0.3s ease;
+        }
+        .video-area {
+            position: relative;
+            border-radius: 1.5rem;
+            overflow: hidden;
+            background: #000000;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(0, 255, 255, 0.2);
+        }
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .controls-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(0deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.4) 70%, transparent 100%);
+            padding: 1rem 1.5rem 1.2rem 1.5rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            backdrop-filter: blur(4px);
+            border-top: 1px solid rgba(0, 255, 255, 0.4);
+        }
+        .video-area:hover .controls-overlay {
+            opacity: 1;
+        }
+        .control-bar {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .play-btn {
+            background: rgba(0, 255, 255, 0.15);
+            border: 1px solid cyan;
+            color: cyan;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+        }
+        .play-btn:hover {
+            background: cyan;
+            color: #0a0f1e;
+            transform: scale(1.05);
+            box-shadow: 0 0 15px cyan;
+        }
+        .stop-btn {
+            background: rgba(255, 80, 80, 0.2);
+            border: 1px solid #ff4d4d;
+            color: #ff8888;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 0 4px rgba(255, 80, 80, 0.4);
+        }
+        .stop-btn:hover {
+            background: #ff4d4d;
+            color: #0a0f1e;
+            transform: scale(1.05);
+            box-shadow: 0 0 15px #ff4d4d;
+            border-color: white;
+        }
+        .time-display {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 0.3rem 0.8rem;
+            border-radius: 2rem;
+            color: #0ff;
+            text-shadow: 0 0 3px cyan;
+            font-weight: 500;
+        }
+        .progress-container {
+            flex: 3;
+            min-width: 150px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .progress-bar-bg {
+            flex: 1;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            cursor: pointer;
+            position: relative;
+            backdrop-filter: blur(2px);
+            transition: height 0.1s;
+        }
+        .progress-bar-bg:hover {
+            height: 8px;
+        }
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #0ff, #f0f);
+            border-radius: 10px;
+            position: relative;
+            box-shadow: 0 0 6px #0ff;
+        }
+        .volume-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 0.2rem 0.8rem;
+            border-radius: 40px;
+            border: 1px solid rgba(0, 255, 255, 0.4);
+        }
+        .volume-icon {
+            color: cyan;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        input[type="range"] {
+            width: 80px;
+            height: 3px;
+            -webkit-appearance: none;
+            background: #333;
+            border-radius: 5px;
+            outline: none;
+            cursor: pointer;
+        }
+        input[type="range"]:focus {
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: cyan;
+            box-shadow: 0 0 6px cyan;
+            cursor: pointer;
+        }
+        .quality-badge, .format-badge {
+            font-size: 0.7rem;
+            background: rgba(0, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 0.2rem 0.7rem;
+            letter-spacing: 1px;
+            font-family: monospace;
+            color: #0ff;
+            border: 0.5px solid cyan;
+        }
+        .source-panel {
+            margin-top: 1.2rem;
+            background: rgba(0, 0, 0, 0.45);
+            border-radius: 2rem;
+            padding: 0.8rem 1.2rem;
+            display: flex;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+        }
+        .input-group {
+            flex: 4;
+            display: flex;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 3rem;
+            border: 1px solid #2a6f8f;
+            transition: 0.2s;
+        }
+        .input-group:focus-within {
+            border-color: cyan;
+            box-shadow: 0 0 12px rgba(0, 255, 255, 0.4);
+        }
+        .input-icon {
+            padding: 0 12px;
+            color: cyan;
+        }
+        .url-input {
+            background: transparent;
+            border: none;
+            padding: 12px 0;
+            width: 100%;
+            color: #eef;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.9rem;
+            outline: none;
+            letter-spacing: 0.5px;
+        }
+        .url-input::placeholder {
+            color: #88aaff88;
+            font-family: monospace;
+        }
+        .neo-btn {
+            background: linear-gradient(135deg, #00ccff20, #0066cc20);
+            border: 1px solid cyan;
+            color: cyan;
+            padding: 8px 22px;
+            border-radius: 40px;
+            font-weight: bold;
+            font-family: 'Orbitron', monospace;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: 0.2s;
+            backdrop-filter: blur(5px);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .neo-btn:hover {
+            background: cyan;
+            color: black;
+            box-shadow: 0 0 15px cyan;
+            text-shadow: none;
+            border-color: white;
+        }
+        .footer-status {
+            margin-top: 12px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            font-family: monospace;
+            color: #0ff8;
+            padding: 0 0.3rem;
+        }
+        @media (max-width: 760px) {
+            .control-bar {
+                gap: 0.5rem;
+            }
+            .volume-box {
+                padding: 0.2rem 0.4rem;
+            }
+            .neo-btn {
+                padding: 6px 14px;
+                font-size: 0.8rem;
+            }
+            .time-display {
+                font-size: 0.7rem;
+            }
+            .play-btn, .stop-btn {
+                width: 36px;
+                height: 36px;
+                font-size: 1rem;
+            }
+        }
+        .loading-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            padding: 8px 20px;
+            border-radius: 60px;
+            color: cyan;
+            font-family: monospace;
+            letter-spacing: 2px;
+            border: 1px solid cyan;
+            box-shadow: 0 0 15px cyan;
+            z-index: 20;
+            display: none;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+        .fullscreen-btn {
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: cyan;
+            font-size: 1.2rem;
+            margin-left: 5px;
+            transition: 0.2s;
+        }
+        .fullscreen-btn:hover {
+            text-shadow: 0 0 8px cyan;
+            transform: scale(1.1);
+        }
+        .player-container {
+            animation: floatGlow 4s infinite alternate;
+        }
+        @keyframes floatGlow {
+            0% { box-shadow: 0 25px 45px rgba(0,0,0,0.5), 0 0 15px rgba(0,255,255,0.2); }
+            100% { box-shadow: 0 30px 55px rgba(0,0,0,0.6), 0 0 25px rgba(0,255,255,0.5); }
+        }
+        .progress-bar-bg:hover .progress-fill {
+            filter: drop-shadow(0 0 3px cyan);
+        }
+        video::-webkit-media-controls {
+            display: none !important;
+        }
+        video {
+            pointer-events: auto;
+        }
+        @media (max-width: 480px) {
+            body {
+                padding:10px;
+            }
+            .player-container{
+                padding:0.8rem;
+                border-radius:1.2rem;
+            }
+            .video-area{
+                border-radius:1rem;
+            }
+            .control-bar{
+                justify-content:center;
+            }
+            .time-display{
+                padding:0.2rem 0.5rem;
+            }
+            .source-panel{
+                flex-direction:column;
+                align-items:stretch;
+                gap:0.6rem;
+                padding:0.7rem;
+            }
+            .url-input{
+                padding:10px 0;
+            }
+            .neo-btn{
+                width:100%;
+                justify-content:center;
+            }
+            .controls-overlay{
+                padding:0.6rem 0.8rem 0.8rem;
+            }
+        }
+        @media (orientation:landscape) and (max-height:480px){
+            .player-container{
+                padding:0.6rem;
+            }
+            .source-panel,.footer-status{
+                display:none;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="player-container">
+    <div class="video-area" id="videoArea">
+        <video id="videoPlayer" preload="metadata" playsinline webkit-playsinline></video>
+        <div class="loading-indicator" id="loadingIndicator">
+            <i class="fas fa-sync-alt fa-spin"></i> 加载星流 ...
+        </div>
+        <div class="controls-overlay" id="controlsOverlay">
+            <div class="control-bar">
+                <div class="play-btn" id="playPauseBtn">
+                    <i class="fas fa-play" id="playIcon"></i>
+                </div>
+                <div class="stop-btn" id="stopBtn" title="停止播放并清空画面">
+                    <i class="fas fa-stop"></i>
+                </div>
+                <div class="time-display" id="timeDisplay">00:00 / 00:00</div>
+                <div class="progress-container">
+                    <div class="progress-bar-bg" id="progressBarBg">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                </div>
+                <div class="volume-box">
+                    <i class="fas fa-volume-up volume-icon" id="volumeIcon"></i>
+                    <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="0.7">
+                </div>
+                <div class="quality-badge" id="streamTypeBadge">MP4</div>
+                <button class="fullscreen-btn" id="fullscreenBtn"><i class="fas fa-expand"></i></button>
+            </div>
+        </div>
+    </div>
+    <div class="source-panel">
+        <div class="input-group">
+            <span class="input-icon"><i class="fas fa-link"></i></span>
+            <input type="text" id="videoUrlInput" class="url-input" placeholder="输入视频地址 (支持 .mp4 或 .m3u8) ..." value="">
+        </div>
+        <button class="neo-btn" id="loadUrlBtn"><i class="fas fa-play-circle"></i> 加载播放</button>
+    </div>
+    <div class="footer-status">
+        <span><i class="fas fa-shield-alt"></i> 引擎·HLS.js + HTML5</span>
+        <span><i class="fas fa-charging-station"></i> 支持 .mp4 / .m3u8  |  科幻光效界面</span>
+    </div>
+</div>
+<script>
+    (function(){
+        const video = document.getElementById('videoPlayer');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const playIcon = document.getElementById('playIcon');
+        const stopBtn = document.getElementById('stopBtn');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const progressBarBg = document.getElementById('progressBarBg');
+        const progressFill = document.getElementById('progressFill');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const volumeIcon = document.getElementById('volumeIcon');
+        const loadUrlBtn = document.getElementById('loadUrlBtn');
+        const videoUrlInput = document.getElementById('videoUrlInput');
+        const streamTypeBadge = document.getElementById('streamTypeBadge');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const videoArea = document.getElementById('videoArea');
+        let hls = null;
+        let currentUrl = '';
+        let isM3U8 = false;
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return "00:00";
+            const hrs = Math.floor(seconds / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            if (hrs > 0) {
+                return `${hrs.toString().padStart(2,'0')}:${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+            }
+            return `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+        }
+        function updateTimeDisplay() {
+            const current = video.currentTime || 0;
+            const duration = video.duration || 0;
+            timeDisplay.innerText = `${formatTime(current)} / ${formatTime(duration)}`;
+            if (duration > 0) {
+                const percent = (current / duration) * 100;
+                progressFill.style.width = `${percent}%`;
+            } else {
+                progressFill.style.width = '0%';
+            }
+        }
+        function showLoading(show) {
+            loadingIndicator.style.display = show ? 'flex' : 'none';
+        }
+        function destroyHls() {
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+        }
+        function stopPlayback() {
+            video.pause();
+            video.removeAttribute('src');
+            video.srcObject = null;
+            video.load();
+            video.currentTime = 0;
+            destroyHls();
+            isM3U8 = false;
+            currentUrl = '';
+            playIcon.className = 'fas fa-play';
+            progressFill.style.width = '0%';
+            timeDisplay.innerText = '00:00 / 00:00';
+            streamTypeBadge.innerHTML = '<i class="fas fa-circle-notch"></i> 待机';
+            streamTypeBadge.style.color = "#0ff";
+            const sourcePanel = document.querySelector('.source-panel');
+            if (sourcePanel) {
+                sourcePanel.style.transition = 'box-shadow 0.2s';
+                sourcePanel.style.boxShadow = '0 0 12px rgba(255,80,80,0.5)';
+                setTimeout(() => {
+                    sourcePanel.style.boxShadow = '';
+                }, 300);
+            }
+            console.log("播放已停止，画面已清空");
+        }
+        function loadVideoByUrl(url) {
+            if (!url || url.trim() === '') {
+                alert("请填入有效的视频链接");
+                return false;
+            }
+            video.pause();
+            destroyHls();
+            video.removeAttribute('src');
+            video.load();
+            showLoading(true);
+            const trimmedUrl = url.trim();
+            currentUrl = trimmedUrl;
+            const lowerUrl = trimmedUrl.toLowerCase();
+            const isHlsUrl = lowerUrl.includes('.m3u8') || lowerUrl.includes('m3u8') || lowerUrl.endsWith('.m3u8');
+            if (isHlsUrl) {
+                isM3U8 = true;
+                streamTypeBadge.innerHTML = '<i class="fas fa-stream"></i> M3U8 · 自适应';
+                streamTypeBadge.style.color = "#0ff";
+                if (Hls.isSupported()) {
+                    hls = new Hls({
+                        debug: false,
+                        enableWorker: true,
+                        lowLatencyMode: true,
+                        backBufferLength: 60
+                    });
+                    hls.loadSource(trimmedUrl);
+                    hls.attachMedia(video);
+                    hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                        showLoading(false);
+                        video.play().catch(e => { console.warn("自动播放策略限制", e); });
+                    });
+                    hls.on(Hls.Events.ERROR, function(event, data) {
+                        console.error("HLS Error", data);
+                        showLoading(false);
+                        if(data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                            alert("网络错误，无法加载 M3U8 流，请检查链接或网络");
+                        } else if(data.fatal) {
+                            alert("播放 M3U8 失败，可能链接失效或格式不支持");
+                        }
+                    });
+                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                    video.src = trimmedUrl;
+                    video.addEventListener('loadedmetadata', () => {
+                        showLoading(false);
+                        video.play().catch(e=>console.log(e));
+                    }, { once: true });
+                } else {
+                    showLoading(false);
+                    alert("当前浏览器不支持 HLS 播放 (m3u8)");
+                }
+            } else {
+                isM3U8 = false;
+                streamTypeBadge.innerHTML = '<i class="fas fa-file-video"></i> MP4 · 高清';
+                streamTypeBadge.style.color = "#0ff";
+                video.src = trimmedUrl;
+                const onMeta = function() {
+                    showLoading(false);
+                    video.play().catch(e => console.log("autoplay blocked", e));
+                    video.removeEventListener('loadedmetadata', onMeta);
+                };
+                video.addEventListener('loadedmetadata', onMeta);
+                video.addEventListener('error', (e) => {
+                    showLoading(false);
+                    alert("视频加载失败，请检查链接是否为有效的 MP4 或受支持的格式");
+                }, { once: true });
+            }
+            videoUrlInput.value = trimmedUrl;
+            return true;
+        }
+        function loadFromInput() {
+            let url = videoUrlInput.value;
+            if (!url) return;
+            loadVideoByUrl(url);
+        }
+        function bindUIEvents() {
+            playPauseBtn.addEventListener('click', () => {
+                if (video.paused) {
+                    if (!video.src && !currentUrl) {
+                        alert("请先通过上方输入框加载视频");
+                        return;
+                    }
+                    video.play().catch(e => console.log("播放失败", e));
+                } else {
+                    video.pause();
+                }
+            });
+            stopBtn.addEventListener('click', stopPlayback);
+            video.addEventListener('play', () => {
+                playIcon.className = 'fas fa-pause';
+            });
+            video.addEventListener('pause', () => {
+                playIcon.className = 'fas fa-play';
+            });
+            video.addEventListener('timeupdate', updateTimeDisplay);
+            video.addEventListener('loadedmetadata', () => {
+                updateTimeDisplay();
+                if (video.duration && !isNaN(video.duration)) {
+                    progressFill.style.width = '0%';
+                }
+                showLoading(false);
+            });
+            video.addEventListener('waiting', () => showLoading(true));
+            video.addEventListener('canplay', () => showLoading(false));
+            video.addEventListener('playing', () => showLoading(false));
+            progressBarBg.addEventListener('click', (e) => {
+                const rect = progressBarBg.getBoundingClientRect();
+                const percent = (e.clientX - rect.left) / rect.width;
+                if (video.duration && isFinite(video.duration)) {
+                    video.currentTime = percent * video.duration;
+                }
+            });
+            volumeSlider.addEventListener('input', (e) => {
+                const vol = parseFloat(e.target.value);
+                video.volume = vol;
+                if (vol === 0) volumeIcon.className = 'fas fa-volume-mute';
+                else if (vol < 0.4) volumeIcon.className = 'fas fa-volume-down';
+                else volumeIcon.className = 'fas fa-volume-up';
+            });
+            volumeIcon.addEventListener('click', () => {
+                if (video.volume > 0) {
+                    video.volume = 0;
+                    volumeSlider.value = 0;
+                    volumeIcon.className = 'fas fa-volume-mute';
+                } else {
+                    video.volume = 0.7;
+                    volumeSlider.value = 0.7;
+                    volumeIcon.className = 'fas fa-volume-up';
+                }
+            });
+            fullscreenBtn.addEventListener('click', () => {
+                const container = videoArea;
+                if (!document.fullscreenElement) {
+                    if (container.requestFullscreen) {
+                        container.requestFullscreen();
+                    } else if (container.webkitRequestFullscreen) {
+                        container.webkitRequestFullscreen();
+                    } else if (container.msRequestFullscreen) {
+                        container.msRequestFullscreen();
+                    }
+                } else {
+                    document.exitFullscreen();
+                }
+            });
+            loadUrlBtn.addEventListener('click', loadFromInput);
+            videoUrlInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') loadFromInput();
+            });
+        }
+        window.addEventListener('beforeunload', () => {
+            if (hls) {
+                hls.destroy();
+            }
+        });
+        video.addEventListener('error', (err) => {
+            console.error("video error", err);
+            showLoading(false);
+        });
+        video.addEventListener('click', () => {
+            if (video.paused) {
+                if (!video.src && !currentUrl) {
+                    alert("请先通过上方输入框加载视频");
+                    return;
+                }
+                video.play().catch(e => console.log("播放失败", e));
+            }
+            else video.pause();
+        });
+        function initDefaultState() {
+            video.removeAttribute('src');
+            video.load();
+            streamTypeBadge.innerHTML = '<i class="fas fa-circle-notch"></i> 待机';
+            streamTypeBadge.style.color = "#0ff";
+            timeDisplay.innerText = '00:00 / 00:00';
+            progressFill.style.width = '0%';
+            playIcon.className = 'fas fa-play';
+            videoUrlInput.placeholder = "输入 MP4 或 M3U8 地址后点击加载播放";
+        }
+        bindUIEvents();
+        initDefaultState();
+        window.playerAPI = { load: loadVideoByUrl, stop: stopPlayback };
+    })();
+</script>
+</body>
+</html>
